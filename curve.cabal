@@ -1,0 +1,39 @@
+cabal-version:       2.4
+
+name:                curve
+version:             0.1.0.0
+synopsis:            Discord bot for /r/Cubers
+license:             AGPL-3.0-only
+license-file:        LICENSE
+author:              Kevin Mullins
+maintainer:          46154511+pnotequalnp@users.noreply.github.com
+copyright:           © 2020 Kevin Mullins
+category:            Web
+
+executable curve
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  other-modules:       Config
+  default-extensions:  BangPatterns
+                     , BlockArguments
+                     , EmptyCase
+                     , LambdaCase
+                     , NoStarIsType
+                     , OverloadedStrings
+                     , RankNTypes
+                     , TupleSections
+                     , TypeApplications
+                     , TypeOperators
+                     , ViewPatterns
+  ghc-options:         -Wall
+                       -fdefer-type-errors
+                       -fno-show-valid-hole-fits
+  build-depends:       base ^>=4.13.0.0
+                     , aeson
+                     , containers
+                     , discord-haskell ^>=1.8.0
+                     , lens
+                     , mtl
+                     , text
+                     , transformers
+                     , yaml
