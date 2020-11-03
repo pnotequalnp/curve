@@ -9,6 +9,7 @@ import Control.Applicative ((<|>))
 import Control.Arrow ((&&&))
 import Control.Lens hiding (Context)
 import Control.Monad (guard)
+import Control.Monad.Except (ExceptT(..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (withReaderT, ReaderT)
 import Control.Monad.Trans.Class (lift)
@@ -65,18 +66,36 @@ dbConnect = do
   host <- getEnv "POSTGRES_HOST"
   user <- getEnv "POSTGRES_USER"
   pass <- getEnv "POSTGRES_PASSWORD"
+  port <- getEnv "POSTGRES_PORT"
   db   <- getEnv "POSTGRES_DB" <|> pure ""
-  Sql.connect $ Sql.ConnectInfo host 5432 user pass db
+  Sql.connect $ Sql.ConnectInfo host (read port) user pass db
 
 dbInit :: Sql.Connection -> IO ()
-dbInit conn =
-  void $ Sql.execute_ conn "CREATE TABLE IF NOT EXISTS users (id VARCHAR(20) PRIMARY KEY)"
+dbInit conn = do
+  void $ Sql.execute_ conn create
+  where
+  create =
+    "CREATE TABLE IF NOT EXISTS users (\
+    \  id VARCHAR(20),\
+    \  guild_id VARCHAR(20),\
+    \  PRIMARY KEY (id, guild_id)\
+    \)"
 
 startHandler :: CurveM ()
 startHandler = do
   Right self <- disc $ restCall R.GetCurrentUser
   view botId >>= liftIO . flip atomicModifyIORef (const (userId self, ()))
   liftIO $ putStrLn "Connected"
+
+fullMemberList :: GuildId -> ExceptT RestCallErrorCode DiscordHandler [GuildMember]
+fullMemberList guildid = go Nothing
+  where
+  go lowest = do
+    members <- ExceptT . restCall . R.ListGuildMembers guildid $
+      R.GuildMembersTiming (Just 1000) lowest
+    if length members < 1000
+      then pure members
+      else (members <>) <$> go (Just . userId . memberUser . last $ members)
 
 eventHandler :: Event -> CurveM ()
 eventHandler = \case
@@ -87,26 +106,28 @@ eventHandler = \case
   _                     -> pure ()
 
 reactionHandler :: ReactionInfo -> CurveM ()
-reactionHandler ReactionInfo { reactionUserId = u, reactionMessageId = m, reactionEmoji = e } =
+reactionHandler ReactionInfo
+  { reactionGuildId = g, reactionUserId = u, reactionMessageId = m, reactionEmoji = e } =
   void $ runMaybeT do
+    guildid  <- show <$> hoistMaybe g
     newjoins <- view newJoins >>= liftIO . readIORef
     guard $ u `S.member` newjoins
     conn     <- view dbConn
-    usrs     <- liftIO $ Sql.query conn select userid
+    usrs     <- liftIO $ Sql.query conn select (userid, guildid)
     conf     <- view config
     eid      <- hoistMaybe $ emojiId e
     settings <- hoistMaybe $ conf ^. C.reactMessages . at m
     res      <- hoistMaybe $ settings ^. C.responses . at eid
-    let status = bool "returning" "new" $ null (usrs :: [[String]])
+    let status = bool "returning" "new" $ null (usrs :: [Sql.Only String])
         msg    = "Welcome " <> status <> " " <> res <> "! <@" <> (T.pack . show) u <> ">"
         chan   = settings ^. C.responseChannel
     _ <- lift . disc . restCall $ R.CreateMessage chan msg
     lift $ leaveHandler u
-    liftIO $ Sql.execute conn insert userid
+    liftIO $ Sql.execute conn insert (userid, guildid)
   where
-  select = "SELECT id FROM users WHERE id = ?"
-  insert = "INSERT INTO users (id) VALUES(?) ON CONFLICT DO NOTHING"
-  userid = Sql.Only . show $ u
+  select = "SELECT id FROM users WHERE id = ? AND guild_id = ?"
+  insert = "INSERT INTO users (id, guild_id) VALUES(?,?) ON CONFLICT DO NOTHING"
+  userid = show u
 
 messageHandler :: Message -> CurveM ()
 messageHandler m = do
