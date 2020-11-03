@@ -34,6 +34,7 @@ executable curve
                      , discord-haskell ^>=1.8.0
                      , lens
                      , mtl
+                     , postgresql-simple
                      , text
                      , transformers
                      , yaml
