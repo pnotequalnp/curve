@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -54,12 +52,11 @@ main = do
       discordConfig = def
         { discordToken = tok
         , discordOnStart = context startHandler
-        , discordOnEnd = putStrLn "Disconnected"
+        , discordOnEnd = Sql.close conn *> putStrLn "Disconnected"
         , discordOnEvent = context . eventHandler
         , discordOnLog = T.putStrLn
         }
   runDiscord discordConfig >>= T.putStrLn
-  Sql.close conn
 
 dbConnect :: IO Sql.Connection
 dbConnect = do
@@ -71,7 +68,7 @@ dbConnect = do
   Sql.connect $ Sql.ConnectInfo host (read port) user pass db
 
 dbInit :: Sql.Connection -> IO ()
-dbInit conn = do
+dbInit conn =
   void $ Sql.execute_ conn create
   where
   create =
