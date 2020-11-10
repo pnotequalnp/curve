@@ -12,14 +12,14 @@ import Data.Aeson
 import Data.Aeson.TH
 import Data.Map.Strict (Map)
 import Data.Text (Text)
-import Discord.Types (MessageId, EmojiId)
+import Discord.Types (ChannelId, MessageId, EmojiId)
 import Discord.Internal.Types (Snowflake(..))
 
 deriving instance ToJSONKey Snowflake
 deriving instance FromJSONKey Snowflake
 
 data ReactionMessage = ReactionMessage
-  { _responseChannel :: !MessageId
+  { _responseChannel :: !ChannelId
   , _responses :: !(Map EmojiId Text)
   } deriving Show
 makeLenses ''ReactionMessage
