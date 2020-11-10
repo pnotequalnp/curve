@@ -15,6 +15,8 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Bool (bool)
 import Data.Functor (void)
 import Data.IORef
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -31,7 +33,7 @@ import qualified Config as C
 data Context = Context
   { _config   :: !C.Config
   , _dbConn   :: !Sql.Connection
-  , _newJoins :: !(IORef (Set UserId))
+  , _newJoins :: !(IORef (Map GuildId (Set UserId)))
   , _botId    :: !(IORef UserId)
   , _handle   :: !DiscordHandle
   }
@@ -45,7 +47,7 @@ main = do
   confFile <- getEnv "CURVE_CONFIG" <|> pure "curve.yml"
   conf     <- Y.decodeFileThrow confFile
   conn     <- dbConnect
-  newjoins <- newIORef S.empty
+  newjoins <- newIORef M.empty
   bot      <- newIORef (undefined :: UserId)
   dbInit conn
   let context = withReaderT $ Context conf conn newjoins bot
@@ -96,19 +98,21 @@ fullMemberList guildid = go Nothing
 
 eventHandler :: Event -> CurveM ()
 eventHandler = \case
-  GuildMemberAdd _ gu   -> joinHandler . userId $ memberUser gu
-  GuildMemberRemove _ u -> leaveHandler $ userId u
-  MessageCreate m       -> messageHandler m
-  MessageReactionAdd r  -> reactionHandler r
-  _                     -> pure ()
+  GuildMemberAdd gid gu   -> joinHandler (userId . memberUser $ gu) gid
+  GuildMemberRemove gid u -> leaveHandler (userId u) gid
+  MessageCreate m         -> messageHandler m
+  MessageReactionAdd r    -> reactionHandler r
+  _                       -> pure ()
 
 reactionHandler :: ReactionInfo -> CurveM ()
 reactionHandler ReactionInfo
   { reactionGuildId = g, reactionUserId = u, reactionMessageId = m, reactionEmoji = e } =
   void $ runMaybeT do
-    guildid  <- show <$> hoistMaybe g
-    newjoins <- view newJoins >>= liftIO . readIORef
+    gid      <- hoistMaybe g
+    allNew   <- view newJoins >>= liftIO . readIORef
+    newjoins <- hoistMaybe (allNew ^. at gid)
     guard $ u `S.member` newjoins
+    let guildid = show gid
     conn     <- view dbConn
     usrs     <- liftIO $ Sql.query conn select (userid, guildid)
     conf     <- view config
@@ -119,7 +123,7 @@ reactionHandler ReactionInfo
         msg    = "Welcome " <> status <> " " <> res <> "! <@" <> (T.pack . show) u <> ">"
         chan   = settings ^. C.responseChannel
     _ <- lift . disc . restCall $ R.CreateMessage chan msg
-    lift $ leaveHandler u
+    lift $ leaveHandler u gid
     liftIO $ Sql.execute conn insert (userid, guildid)
   where
   select = "SELECT id FROM users WHERE id = ? AND guild_id = ?"
@@ -137,12 +141,17 @@ messageHandler m = do
   pinged u = u `elem` (userId <$> messageMentions m)
   special = (userId . messageAuthor) m == 263665073577263104
 
-joinHandler :: UserId -> CurveM ()
-joinHandler uid = view newJoins >>= liftIO . flip atomicModifyIORef (S.insert uid &&& const ())
+joinHandler :: UserId -> GuildId -> CurveM ()
+joinHandler uid gid = view newJoins >>= liftIO . flip atomicModifyIORef (adduser &&& const ())
+  where
+  adduser :: Map GuildId (Set UserId) -> Map GuildId (Set UserId)
+  adduser = at gid %~ f
+  f :: Maybe (Set UserId) -> Maybe (Set UserId)
+  f s = fmap (S.insert uid) s <|> Just (S.singleton uid)
 
-leaveHandler :: UserId -> CurveM ()
-leaveHandler uid = view newJoins >>=
-  liftIO . flip atomicModifyIORef (sans uid &&& const ())
+leaveHandler :: UserId -> GuildId -> CurveM ()
+leaveHandler uid gid = view newJoins >>=
+  liftIO . flip atomicModifyIORef (at gid %~ fmap (sans uid) &&& const ())
 
 disc :: ReaderT DiscordHandle m a -> ReaderT Context m a
 disc = withReaderT $ view handle
