@@ -25,6 +25,7 @@ import Discord
 import Discord.Types
 import qualified Discord.Requests as R
 import System.Environment (getEnv)
+import System.IO (stderr)
 import UnliftIO.STM
 
 import qualified Config as C
@@ -53,11 +54,11 @@ main = do
       discordConfig = def
         { discordToken = tok
         , discordOnStart = context startHandler
-        , discordOnEnd = Sql.close conn *> putStrLn "Disconnected"
+        , discordOnEnd = Sql.close conn *> T.hPutStrLn stderr "Disconnected"
         , discordOnEvent = context . eventHandler
-        , discordOnLog = T.putStrLn
+        , discordOnLog = T.hPutStrLn stderr
         }
-  runDiscord discordConfig >>= T.putStrLn
+  runDiscord discordConfig >>= T.hPutStrLn stderr
 
 dbConnect :: IO Sql.Connection
 dbConnect = do
@@ -83,7 +84,7 @@ startHandler :: CurveM ()
 startHandler = do
   Right self <- disc $ restCall R.GetCurrentUser
   view botId >>= atomically . flip putTMVar (userId self)
-  liftIO $ putStrLn "Connected"
+  liftIO $ T.hPutStrLn stderr "Connected"
 
 fullMemberList :: GuildId -> ExceptT RestCallErrorCode DiscordHandler [GuildMember]
 fullMemberList guildid = go Nothing
