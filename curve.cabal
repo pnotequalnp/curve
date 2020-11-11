@@ -37,4 +37,5 @@ executable curve
                      , postgresql-simple
                      , text
                      , transformers
+                     , unliftio
                      , yaml

@@ -4,7 +4,6 @@
 module Main where
 
 import Control.Applicative ((<|>))
-import Control.Arrow ((&&&))
 import Control.Lens hiding (Context)
 import Control.Monad (guard)
 import Control.Monad.Except (ExceptT(..))
@@ -14,7 +13,6 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Bool (bool)
 import Data.Functor (void)
-import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -27,14 +25,15 @@ import Discord
 import Discord.Types
 import qualified Discord.Requests as R
 import System.Environment (getEnv)
+import UnliftIO.STM
 
 import qualified Config as C
 
 data Context = Context
   { _config   :: !C.Config
   , _dbConn   :: !Sql.Connection
-  , _newJoins :: !(IORef (Map GuildId (Set UserId)))
-  , _botId    :: !(IORef UserId)
+  , _newJoins :: !(TVar (Map GuildId (Set UserId)))
+  , _botId    :: !(TMVar UserId)
   , _handle   :: !DiscordHandle
   }
 makeLenses ''Context
@@ -47,8 +46,8 @@ main = do
   confFile <- getEnv "CURVE_CONFIG" <|> pure "curve.yml"
   conf     <- Y.decodeFileThrow confFile
   conn     <- dbConnect
-  newjoins <- newIORef M.empty
-  bot      <- newIORef (undefined :: UserId)
+  newjoins <- newTVarIO M.empty
+  bot      <- newEmptyTMVarIO
   dbInit conn
   let context = withReaderT $ Context conf conn newjoins bot
       discordConfig = def
@@ -83,7 +82,7 @@ dbInit conn =
 startHandler :: CurveM ()
 startHandler = do
   Right self <- disc $ restCall R.GetCurrentUser
-  view botId >>= liftIO . flip atomicModifyIORef (const (userId self, ()))
+  view botId >>= atomically . flip putTMVar (userId self)
   liftIO $ putStrLn "Connected"
 
 fullMemberList :: GuildId -> ExceptT RestCallErrorCode DiscordHandler [GuildMember]
@@ -109,7 +108,7 @@ reactionHandler ReactionInfo
   { reactionGuildId = g, reactionUserId = u, reactionMessageId = m, reactionEmoji = e } =
   void $ runMaybeT do
     gid      <- hoistMaybe g
-    allNew   <- view newJoins >>= liftIO . readIORef
+    allNew   <- view newJoins >>= readTVarIO
     newjoins <- hoistMaybe (allNew ^. at gid)
     guard $ u `S.member` newjoins
     let guildid = show gid
@@ -132,7 +131,7 @@ reactionHandler ReactionInfo
 
 messageHandler :: Message -> CurveM ()
 messageHandler m = do
-  bot <- view botId >>= liftIO . readIORef
+  bot <- view botId >>= atomically . readTMVar
   disc $ case (pinged bot, special) of
     (True, True)  -> void . restCall $ R.CreateMessage (messageChannel m) "Hello :eyes:"
     (True, False) -> void . restCall $ R.CreateReaction (messageChannel m, messageId m) "eyes"
@@ -142,16 +141,12 @@ messageHandler m = do
   special = (userId . messageAuthor) m == 263665073577263104
 
 joinHandler :: UserId -> GuildId -> CurveM ()
-joinHandler uid gid = view newJoins >>= liftIO . flip atomicModifyIORef (adduser &&& const ())
-  where
-  adduser :: Map GuildId (Set UserId) -> Map GuildId (Set UserId)
-  adduser = at gid %~ f
-  f :: Maybe (Set UserId) -> Maybe (Set UserId)
-  f s = fmap (S.insert uid) s <|> Just (S.singleton uid)
+joinHandler uid gid = view newJoins >>= atomically . flip modifyTVar' adduser
+  where adduser = at gid %~ Just . maybe (S.singleton uid) (S.insert uid)
 
 leaveHandler :: UserId -> GuildId -> CurveM ()
 leaveHandler uid gid = view newJoins >>=
-  liftIO . flip atomicModifyIORef (at gid %~ fmap (sans uid) &&& const ())
+  atomically . flip modifyTVar' (at gid %~ fmap (sans uid))
 
 disc :: ReaderT DiscordHandle m a -> ReaderT Context m a
 disc = withReaderT $ view handle
