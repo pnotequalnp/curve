@@ -5,7 +5,7 @@ module Main where
 import Control.Applicative (Alternative, empty)
 import Control.Lens hiding (Context)
 import Control.Monad (guard)
-import Control.Monad.Except (ExceptT(..))
+import Control.Monad.Except (runExceptT, ExceptT(..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (withReaderT, ReaderT)
 import Control.Monad.Trans.Class (lift)
@@ -17,18 +17,21 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Yaml as Y
 import Discord
 import Discord.Types
 import qualified Discord.Requests as R
+import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
 import UnliftIO.Environment (getEnv, lookupEnv)
 import UnliftIO.STM
 
 import qualified Curve.Config as C
 import qualified Curve.Database as D
+import qualified Curve.Options as O
 
 data Context = Context
   { _config   :: !C.Config
@@ -43,7 +46,28 @@ type CurveM = ReaderT Context IO
 
 main :: IO ()
 main = do
-  tok      <- T.pack <$> getEnv "DISCORD_TOKEN"
+  tok  <- T.pack <$> getEnv "DISCORD_TOKEN"
+  opts <- O.options
+  maybe (curve tok) (fillGuild tok) $ O.fillGuild opts
+
+fillGuild :: Text -> GuildId -> IO ()
+fillGuild tok gid = void $ runDiscord def
+  { discordToken = tok
+  , discordOnStart = onStart
+  }
+  where
+  onStart = do
+    mbrs <- runExceptT $ fullMemberList gid
+    liftIO case mbrs of
+      Left err -> do
+        T.hPutStrLn stderr . T.pack . show $ err
+        exitFailure
+      Right mbrs' -> do
+        D.withConnection \conn -> D.markReturnings conn (userId . memberUser <$> mbrs') $ repeat gid
+        exitSuccess
+
+curve :: Text -> IO ()
+curve tok = do
   confFile <- fromMaybe "curve.yml" <$> lookupEnv "CURVE_CONFIG"
   conf     <- Y.decodeFileThrow confFile
   newjoins <- newTVarIO M.empty

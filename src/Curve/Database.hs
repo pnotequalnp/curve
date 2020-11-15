@@ -2,6 +2,7 @@ module Curve.Database
   ( Connection
   , isReturning
   , markReturning
+  , markReturnings
   , withConnection
   ) where
 
@@ -45,4 +46,9 @@ isReturning conn userid guildid = do
 
 markReturning :: MonadIO m => Connection -> UserId -> GuildId -> m ()
 markReturning conn userid guildid = void . liftIO $ execute conn insert (show userid, show guildid)
+  where insert = "INSERT INTO users (id, guild_id) VALUES(?,?) ON CONFLICT DO NOTHING"
+
+markReturnings :: MonadIO m => Connection -> [UserId] -> [GuildId] -> m ()
+markReturnings conn userids guildids =
+  void . liftIO . executeMany conn insert $ zip (show <$> userids) (show <$> guildids)
   where insert = "INSERT INTO users (id, guild_id) VALUES(?,?) ON CONFLICT DO NOTHING"
