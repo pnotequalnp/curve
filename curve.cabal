@@ -11,9 +11,10 @@ copyright:           © 2020 Kevin Mullins
 category:            Web
 
 executable curve
+  hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
-  other-modules:       Config
+  other-modules:       Curve.Config
   default-extensions:  BangPatterns
                      , BlockArguments
                      , EmptyCase

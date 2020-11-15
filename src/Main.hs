@@ -28,7 +28,7 @@ import System.Environment (getEnv)
 import System.IO (stderr)
 import UnliftIO.STM
 
-import qualified Config as C
+import qualified Curve.Config as C
 
 data Context = Context
   { _config   :: !C.Config

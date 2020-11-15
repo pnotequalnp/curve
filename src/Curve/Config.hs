@@ -5,7 +5,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Config where
+module Curve.Config where
 
 import Control.Lens
 import Data.Aeson
