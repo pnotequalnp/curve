@@ -11,12 +11,15 @@ copyright:           © 2020 Kevin Mullins
 category:            Web
 
 executable curve
+  hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
-  other-modules:       Config
+  other-modules:       Curve.Config
+                     , Curve.Database
   default-extensions:  BangPatterns
                      , BlockArguments
                      , EmptyCase
+                     , FlexibleContexts
                      , LambdaCase
                      , NoStarIsType
                      , OverloadedStrings
@@ -38,4 +41,5 @@ executable curve
                      , text
                      , transformers
                      , unliftio
+                     , unliftio-core
                      , yaml

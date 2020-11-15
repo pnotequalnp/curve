@@ -20,7 +20,6 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Yaml as Y
-import qualified Database.PostgreSQL.Simple as Sql
 import Discord
 import Discord.Types
 import qualified Discord.Requests as R
@@ -28,11 +27,12 @@ import System.Environment (getEnv)
 import System.IO (stderr)
 import UnliftIO.STM
 
-import qualified Config as C
+import qualified Curve.Config as C
+import qualified Curve.Database as D
 
 data Context = Context
   { _config   :: !C.Config
-  , _dbConn   :: !Sql.Connection
+  , _dbConn   :: !D.Connection
   , _newJoins :: !(TVar (Map GuildId (Set UserId)))
   , _botId    :: !(TMVar UserId)
   , _handle   :: !DiscordHandle
@@ -46,39 +46,18 @@ main = do
   tok      <- T.pack <$> getEnv "DISCORD_TOKEN"
   confFile <- getEnv "CURVE_CONFIG" <|> pure "curve.yml"
   conf     <- Y.decodeFileThrow confFile
-  conn     <- dbConnect
   newjoins <- newTVarIO M.empty
   bot      <- newEmptyTMVarIO
-  dbInit conn
-  let context = withReaderT $ Context conf conn newjoins bot
-      discordConfig = def
-        { discordToken = tok
-        , discordOnStart = context startHandler
-        , discordOnEnd = Sql.close conn *> T.hPutStrLn stderr "Disconnected"
-        , discordOnEvent = context . eventHandler
-        , discordOnLog = T.hPutStrLn stderr
-        }
-  runDiscord discordConfig >>= T.hPutStrLn stderr
-
-dbConnect :: IO Sql.Connection
-dbConnect = do
-  host <- getEnv "POSTGRES_HOST"
-  user <- getEnv "POSTGRES_USER"
-  pass <- getEnv "POSTGRES_PASSWORD"
-  port <- getEnv "POSTGRES_PORT"
-  db   <- getEnv "POSTGRES_DB" <|> pure ""
-  Sql.connect $ Sql.ConnectInfo host (read port) user pass db
-
-dbInit :: Sql.Connection -> IO ()
-dbInit conn =
-  void $ Sql.execute_ conn create
-  where
-  create =
-    "CREATE TABLE IF NOT EXISTS users (\
-    \  id VARCHAR(20),\
-    \  guild_id VARCHAR(20),\
-    \  PRIMARY KEY (id, guild_id)\
-    \)"
+  D.withConnection \conn ->
+    let context = withReaderT $ Context conf conn newjoins bot
+        discordConfig = def
+          { discordToken = tok
+          , discordOnStart = context startHandler
+          , discordOnEnd = T.hPutStrLn stderr "Disconnected"
+          , discordOnEvent = context . eventHandler
+          , discordOnLog = T.hPutStrLn stderr
+          }
+     in runDiscord discordConfig >>= T.hPutStrLn stderr
 
 startHandler :: CurveM ()
 startHandler = do
@@ -106,29 +85,24 @@ eventHandler = \case
 
 reactionHandler :: ReactionInfo -> CurveM ()
 reactionHandler ReactionInfo
-  { reactionGuildId = g, reactionUserId = u, reactionMessageId = m, reactionEmoji = e } =
+  { reactionGuildId = g, reactionUserId = uid, reactionMessageId = mid, reactionEmoji = e } =
   void $ runMaybeT do
     gid      <- hoistMaybe g
     allNew   <- view newJoins >>= readTVarIO
     newjoins <- hoistMaybe (allNew ^. at gid)
-    guard $ u `S.member` newjoins
-    let guildid = show gid
+    guard $ uid `S.member` newjoins
     conn     <- view dbConn
-    usrs     <- liftIO $ Sql.query conn select (userid, guildid)
+    new      <- not <$> D.isReturning conn uid gid
     conf     <- view config
     eid      <- hoistMaybe $ emojiId e
-    settings <- hoistMaybe $ conf ^. C.reactMessages . at m
+    settings <- hoistMaybe $ conf ^. C.reactMessages . at mid
     res      <- hoistMaybe $ settings ^. C.responses . at eid
-    let status = bool "returning" "new" $ null (usrs :: [Sql.Only String])
-        msg    = "Welcome " <> status <> " " <> res <> "! <@" <> (T.pack . show) u <> ">"
+    let status = bool "returning" "new" new
+        msg    = "Welcome " <> status <> " " <> res <> "! <@" <> (T.pack . show) uid <> ">"
         chan   = settings ^. C.responseChannel
     _ <- lift . disc . restCall $ R.CreateMessage chan msg
-    lift $ leaveHandler u gid
-    liftIO $ Sql.execute conn insert (userid, guildid)
-  where
-  select = "SELECT id FROM users WHERE id = ? AND guild_id = ?"
-  insert = "INSERT INTO users (id, guild_id) VALUES(?,?) ON CONFLICT DO NOTHING"
-  userid = show u
+    lift $ leaveHandler uid gid
+    D.markReturning conn uid gid
 
 messageHandler :: Message -> CurveM ()
 messageHandler m = do
