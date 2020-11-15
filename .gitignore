@@ -27,3 +27,4 @@ cabal.project.local~
 .ghc.environment.*
 
 /.env
+/curve.yml
