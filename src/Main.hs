@@ -1,9 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (Alternative, empty)
 import Control.Lens hiding (Context)
 import Control.Monad (guard)
 import Control.Monad.Except (ExceptT(..))
@@ -14,6 +13,7 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Bool (bool)
 import Data.Functor (void)
 import Data.Map (Map)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -23,8 +23,8 @@ import qualified Data.Yaml as Y
 import Discord
 import Discord.Types
 import qualified Discord.Requests as R
-import System.Environment (getEnv)
 import System.IO (stderr)
+import UnliftIO.Environment (getEnv, lookupEnv)
 import UnliftIO.STM
 
 import qualified Curve.Config as C
@@ -44,7 +44,7 @@ type CurveM = ReaderT Context IO
 main :: IO ()
 main = do
   tok      <- T.pack <$> getEnv "DISCORD_TOKEN"
-  confFile <- getEnv "CURVE_CONFIG" <|> pure "curve.yml"
+  confFile <- fromMaybe "curve.yml" <$> lookupEnv "CURVE_CONFIG"
   conf     <- Y.decodeFileThrow confFile
   newjoins <- newTVarIO M.empty
   bot      <- newEmptyTMVarIO
@@ -126,5 +126,5 @@ leaveHandler uid gid = view newJoins >>=
 disc :: ReaderT DiscordHandle m a -> ReaderT Context m a
 disc = withReaderT $ view handle
 
-hoistMaybe :: Monad m => Maybe a -> MaybeT m a
-hoistMaybe = MaybeT . pure
+hoistMaybe :: Alternative f => Maybe a -> f a
+hoistMaybe = maybe empty pure
