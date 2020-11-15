@@ -40,7 +40,7 @@ withConnection m = withRunInIO \unlift ->
 isReturning :: MonadIO m => Connection -> UserId -> GuildId -> m Bool
 isReturning conn userid guildid = do
   usrs <- liftIO $ query conn select (show userid, show guildid)
-  pure . null $ (usrs :: [Only String])
+  pure . not . null $ (usrs :: [Only String])
   where select = "SELECT id FROM users WHERE id = ? AND guild_id = ?"
 
 markReturning :: MonadIO m => Connection -> UserId -> GuildId -> m ()
