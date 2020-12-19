@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: 'v*'
+
+jobs:
+  cabal:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: '8.8.4'
+        cabal-version: '3.2'
+
+    - name: Cache
+      uses: actions/cache@v1
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Install dependencies
+      run: |
+        cabal update
+        cabal build -O2 --only-dependencies --enable-tests --enable-benchmarks
+
+    - name: Build
+      run: |
+        cabal build -O2 --enable-tests --enable-benchmarks all
+        mkdir out
+        cabal install -O2 --install-method=copy --installdir=out
+        cd out
+        tar -czvf curve.tar.gz *
+
+    - name: Run tests
+      run: cabal test all
+
+    - name: Get Version
+      id: get_version
+      run: "echo ::set-output name=version::$(cut -c 11- <<< ${{ github.ref }})"
+  
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./out/curve.tar.gz
+        asset_name: curve-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz
+        asset_content_type: application/gzip
