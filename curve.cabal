@@ -1,7 +1,7 @@
 cabal-version:       2.4
 
 name:                curve
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Discord bot for /r/Cubers
 license:             AGPL-3.0-only
 license-file:        LICENSE
@@ -16,6 +16,7 @@ executable curve
   default-language:    Haskell2010
   other-modules:       Curve.Config
                      , Curve.Database
+                     , Curve.Options
   default-extensions:  BangPatterns
                      , BlockArguments
                      , EmptyCase
@@ -37,6 +38,7 @@ executable curve
                      , discord-haskell ^>=1.8.0
                      , lens
                      , mtl
+                     , optparse-applicative
                      , postgresql-simple
                      , text
                      , transformers
