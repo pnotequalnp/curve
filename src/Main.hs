@@ -21,6 +21,7 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Version (showVersion)
 import qualified Data.Yaml as Y
 import Discord
 import Discord.Types
@@ -30,10 +31,11 @@ import System.IO (stderr)
 import UnliftIO.Environment (getEnv, lookupEnv)
 import UnliftIO.STM
 
+import qualified Paths_curve as Paths
+
 import qualified Curve.Config as C
 import qualified Curve.Database as D
 import qualified Curve.Options as O
-import qualified Curve.TH as TH
 
 data Context = Context
   { _config   :: !C.Config
@@ -47,22 +49,22 @@ makeLenses ''Context
 type CurveM = ReaderT Context IO
 
 main :: IO ()
-main = do
-  tok  <- T.pack <$> getEnv "DISCORD_TOKEN"
-  cmd <- O.command
-  case cmd of
-    O.Run -> curve tok
-    O.Version -> T.putStrLn $ "Curve v" <> $(TH.cabalVersion)
-    O.FillGuild (Just gid) -> fillGuild tok gid
-    O.FillGuild Nothing -> T.hPutStrLn stderr "Cannot parse guild ID"
-
-fillGuild :: Text -> GuildId -> IO ()
-fillGuild tok gid = void $ runDiscord def
-  { discordToken = tok
-  , discordOnStart = onStart
-  }
+main = O.command >>= \case
+  O.Run           -> tok >>= curve
+  O.FillGuild gid -> tok >>= flip fillGuild gid
+  O.Version       -> T.putStrLn $ "Curve v" <> (T.pack . showVersion) Paths.version
   where
-  onStart = do
+  tok = T.pack <$> getEnv "DISCORD_TOKEN"
+
+fillGuild :: Text -> Maybe GuildId -> IO ()
+fillGuild tok = \case
+  Nothing  -> T.hPutStrLn stderr "Cannot parse guild ID"
+  Just gid -> void $ runDiscord def
+    { discordToken = tok
+    , discordOnStart = onStart gid
+    }
+  where
+  onStart gid = do
     mbrs <- runExceptT $ fullMemberList gid
     liftIO case mbrs of
       Left err -> do

@@ -17,7 +17,7 @@ executable curve
   other-modules:       Curve.Config
                      , Curve.Database
                      , Curve.Options
-                     , Curve.TH
+                     , Paths_curve
   default-extensions:  BangPatterns
                      , BlockArguments
                      , EmptyCase
