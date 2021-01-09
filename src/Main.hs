@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Applicative (Alternative, empty)
+import Control.Concurrent (forkIO)
 import Control.Lens hiding (Context)
 import Control.Monad (guard)
 import Control.Monad.Except (runExceptT, ExceptT(..))
@@ -124,9 +125,9 @@ reactionHandler ReactionInfo
     let status = bool "returning" "new" new
         msg    = "Welcome " <> status <> " " <> res <> "! <@" <> (T.pack . show) uid <> ">"
         chan   = settings ^. C.responseChannel
-    _ <- lift . disc . restCall $ R.CreateMessage chan msg
     lift $ leaveHandler uid gid
-    D.markReturning conn uid gid
+    void . liftIO . forkIO $ D.markReturning conn uid gid
+    void . lift . disc . restCall $ R.CreateMessage chan msg
 
 messageHandler :: Message -> CurveM ()
 messageHandler m = do
