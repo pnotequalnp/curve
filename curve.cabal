@@ -1,7 +1,7 @@
 cabal-version:       2.4
 
 name:                curve
-version:             0.1.0.2
+version:             0.1.0.4
 synopsis:            Discord bot for /r/Cubers
 license:             AGPL-3.0-only
 license-file:        LICENSE
@@ -17,6 +17,7 @@ executable curve
   other-modules:       Curve.Config
                      , Curve.Database
                      , Curve.Options
+                     , Curve.TH
   default-extensions:  BangPatterns
                      , BlockArguments
                      , EmptyCase
@@ -30,10 +31,10 @@ executable curve
                      , TypeOperators
                      , ViewPatterns
   ghc-options:         -Wall
-                       -fdefer-type-errors
                        -fno-show-valid-hole-fits
   build-depends:       base ^>=4.13.0.0
                      , aeson
+                     , Cabal
                      , containers
                      , discord-haskell ^>=1.8.0
                      , lens
@@ -41,6 +42,7 @@ executable curve
                      , optparse-applicative
                      , postgresql-simple
                      , text
+                     , template-haskell
                      , transformers
                      , unliftio
                      , unliftio-core

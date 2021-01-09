@@ -1,26 +1,33 @@
 module Curve.Options where
 
+import Data.Bool (bool)
 import Data.Foldable (fold)
 import Discord.Types (GuildId)
 import Options.Applicative
+import Text.Read (readMaybe)
 
-data Options = Options
-  { fillGuild :: !(Maybe GuildId)
-  }
+data Command
+  = Run
+  | Version
+  | FillGuild !(Maybe GuildId)
 
-options :: IO Options
-options = execParser . info parser $ fold []
+command :: IO Command
+command = execParser . info parser $ fold []
 
-parser :: Parser Options
-parser = toOptions <$> optParser
-  where
-  toOptions = Options . \case
-    "" -> Nothing
-    x  -> Just $ read @GuildId x
-  optParser = strOption . fold $
-    [ long "fillGuild"
-    , short 'f'
-    , metavar "GUILD"
-    , help "Put current guild members into database"
-    , value ""
-    ]
+parser :: Parser Command
+parser = fillParser <|> versionParser
+
+fillParser :: Parser Command
+fillParser = FillGuild . readMaybe <$> (strOption . fold $
+  [ long "fillGuild"
+  , short 'f'
+  , metavar "GUILD"
+  , help "Put current guild members into database"
+  ])
+
+versionParser :: Parser Command
+versionParser = bool Run Version <$> (switch . fold $
+  [ long "version"
+  , short 'v'
+  , help "Show version info"
+  ])

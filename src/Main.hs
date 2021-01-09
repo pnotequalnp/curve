@@ -33,6 +33,7 @@ import UnliftIO.STM
 import qualified Curve.Config as C
 import qualified Curve.Database as D
 import qualified Curve.Options as O
+import qualified Curve.TH as TH
 
 data Context = Context
   { _config   :: !C.Config
@@ -48,8 +49,12 @@ type CurveM = ReaderT Context IO
 main :: IO ()
 main = do
   tok  <- T.pack <$> getEnv "DISCORD_TOKEN"
-  opts <- O.options
-  maybe (curve tok) (fillGuild tok) $ O.fillGuild opts
+  cmd <- O.command
+  case cmd of
+    O.Run -> curve tok
+    O.Version -> T.putStrLn $ "Curve v" <> $(TH.cabalVersion)
+    O.FillGuild (Just gid) -> fillGuild tok gid
+    O.FillGuild Nothing -> T.hPutStrLn stderr "Cannot parse guild ID"
 
 fillGuild :: Text -> GuildId -> IO ()
 fillGuild tok gid = void $ runDiscord def
