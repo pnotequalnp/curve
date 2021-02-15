@@ -35,7 +35,7 @@ executable curve
                        -with-rtsopts=-N
                        -Wall
                        -fno-show-valid-hole-fits
-  build-depends:       base ^>=4.13.0.0
+  build-depends:       base ^>=4.14.0.0
                      , aeson
                      , Cabal
                      , containers
