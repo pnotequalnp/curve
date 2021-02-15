@@ -42,4 +42,4 @@ POSTGRES_DB
 ```
 
 ### Flags
-Curve currently suports the `--version` flag as well as the `--fillGuild` flag. The `--fillGuild` flag takes a guild ID as an argument and populates the databases with all current users of that guild.
+Curve currently suports the `--version` flag as well as the `--fillGuild` flag. The `--fillGuild` flag takes a guild ID as an argument and populates the database with all current users of that guild.
