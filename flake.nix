@@ -11,7 +11,7 @@
       curve = hs.callCabal2nix "curve" ./. {};
       docker = pkgs.dockerTools.buildImage {
         name = "curve";
-        tag = "0.1.0.5";
+        tag = "0.1.0.6";
         contents = [ pkgs.bash pkgs.coreutils curve ];
       };
     in {
