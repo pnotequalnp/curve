@@ -86,4 +86,4 @@ jobs:
         nix build '.#docker'
         docker load < result
         docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password ${{ secrets.DOCKERHUB_TOKEN }}
-        docker push pnotequalnp/curve
+        docker push pnotequalnp/curve:$(cut -c 12- <<< ${{ github.ref }})

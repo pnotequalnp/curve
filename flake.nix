@@ -11,7 +11,7 @@
       curve = hs.callCabal2nix "curve" ./. {};
       docker = pkgs.dockerTools.buildImage {
         name = "pnotequalnp/curve";
-        tag = "0.1.0.7";
+        tag = "0.1.0.8";
         contents = [ pkgs.bash pkgs.coreutils curve ];
         config.Cmd = [ "curve" ];
       };
