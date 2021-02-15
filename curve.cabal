@@ -1,7 +1,7 @@
 cabal-version:       2.4
 
 name:                curve
-version:             0.1.0.5
+version:             0.1.0.6
 synopsis:            Discord bot for /r/Cubers
 license:             AGPL-3.0-only
 license-file:        LICENSE
@@ -35,7 +35,7 @@ executable curve
                        -with-rtsopts=-N
                        -Wall
                        -fno-show-valid-hole-fits
-  build-depends:       base ^>=4.13.0.0
+  build-depends:       base ^>=4.14.0.0
                      , aeson
                      , Cabal
                      , containers
