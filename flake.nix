@@ -10,9 +10,10 @@
       hs = pkgs.haskellPackages;
       curve = hs.callCabal2nix "curve" ./. {};
       docker = pkgs.dockerTools.buildImage {
-        name = "curve";
-        tag = "0.1.0.6";
+        name = "pnotequalnp/curve";
+        tag = "0.1.0.7";
         contents = [ pkgs.bash pkgs.coreutils curve ];
+        config.Cmd = [ "curve" ];
       };
     in {
       defaultPackage = curve;

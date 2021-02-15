@@ -10,12 +10,12 @@ Binaries are available on the [releases](https://github.com/pnotequalnp/curve/re
 
 ### Nix (Recommended)
 ```bash
-nix build github:pnotequalnp/curve/v0.1.0.6
+nix build github:pnotequalnp/curve/v0.1.0.7
 ```
 
 ### Docker
 ```bash
-docker pull pnotequalnp/curve:0.1.0.6
+docker pull pnotequalnp/curve:0.1.0.7
 ```
 
 ### Cabal
